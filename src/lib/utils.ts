@@ -33,3 +33,12 @@ export function daysOverdue(lastPaymentOrEnroll: Date) {
   const ms = Date.now() - new Date(lastPaymentOrEnroll).getTime();
   return Math.floor(ms / (1000 * 60 * 60 * 24));
 }
+
+const PASSWORD_CHARS = "ABCDEFGHJKLMNPQRSTUVWXYZabcdefghijkmnpqrstuvwxyz23456789!@#$%";
+
+/** Generates a random password using the Web Crypto API (available in both the browser and Node). */
+export function generateRandomPassword(length = 12) {
+  const bytes = new Uint32Array(length);
+  crypto.getRandomValues(bytes);
+  return Array.from(bytes, (b) => PASSWORD_CHARS[b % PASSWORD_CHARS.length]).join("");
+}

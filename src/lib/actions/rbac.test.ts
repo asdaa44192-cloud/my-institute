@@ -377,7 +377,13 @@ describe("subject assignment/enrollment (admin-only)", () => {
 
 describe("user management (admin-only)", () => {
   const newTeacherForm = () =>
-    formData({ name: "New Person", email: "new-person@test.com", phone: "+15550000000", role: "TEACHER" });
+    formData({
+      name: "New Person",
+      email: "new-person@test.com",
+      password: "testpass123",
+      phone: "+15550000000",
+      role: "TEACHER",
+    });
 
   it("blocks teachers from listing users", async () => {
     asTeacher();
@@ -404,15 +410,32 @@ describe("user management (admin-only)", () => {
     await createUser(newTeacherForm());
     const created = await prisma.user.findUnique({ where: { email: "new-person@test.com" } });
     expect(created).not.toBeNull();
-    expect(created?.passwordHash).toBeNull();
+    expect(created?.passwordHash).not.toBeNull();
 
     await deleteUser(created!.id, "admin-1");
     expect(await prisma.user.findUnique({ where: { id: created!.id } })).toBeNull();
   });
 
+  it("requires a password of at least 6 characters", async () => {
+    asAdmin();
+    const fd = formData({
+      name: "New Person",
+      email: "new-person@test.com",
+      password: "abc",
+      phone: "+15550000000",
+      role: "TEACHER",
+    });
+    await expect(createUser(fd)).rejects.toThrow("Password must be at least 6 characters");
+  });
+
   it("requires a phone number for a non-student account", async () => {
     asAdmin();
-    const fd = formData({ name: "New Person", email: "new-person@test.com", role: "TEACHER" });
+    const fd = formData({
+      name: "New Person",
+      email: "new-person@test.com",
+      password: "testpass123",
+      role: "TEACHER",
+    });
     await expect(createUser(fd)).rejects.toThrow("Phone number is required");
   });
 
@@ -427,7 +450,12 @@ describe("user management (admin-only)", () => {
 
   it("requires a linked student when creating a STUDENT login", async () => {
     asAdmin();
-    const fd = formData({ name: "Student Login", email: "student@test.com", role: "STUDENT" });
+    const fd = formData({
+      name: "Student Login",
+      email: "student@test.com",
+      password: "testpass123",
+      role: "STUDENT",
+    });
     await expect(createUser(fd)).rejects.toThrow("Select which student this login belongs to");
   });
 
@@ -437,6 +465,7 @@ describe("user management (admin-only)", () => {
     const fd = formData({
       name: "Student Login",
       email: "student@test.com",
+      password: "testpass123",
       role: "STUDENT",
       studentId: student.id,
     });
@@ -444,7 +473,7 @@ describe("user management (admin-only)", () => {
     const created = await prisma.user.findUnique({ where: { email: "student@test.com" } });
     expect(created?.studentId).toBe(student.id);
     expect(created?.phone).toBe(student.parentPhone);
-    expect(created?.passwordHash).toBeNull();
+    expect(created?.passwordHash).not.toBeNull();
   });
 });
 

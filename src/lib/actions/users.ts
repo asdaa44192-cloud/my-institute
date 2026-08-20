@@ -1,14 +1,15 @@
 "use server";
 
 import { z } from "zod";
+import bcrypt from "bcryptjs";
 import { revalidatePath } from "next/cache";
 import { prisma } from "@/lib/prisma";
 import { requireAdmin } from "@/lib/session";
-import { createInvitation } from "@/lib/actions/invitations";
 
 const userSchema = z.object({
   name: z.string().min(1, "Name is required"),
   email: z.string().email("Valid email required"),
+  password: z.string().min(6, "Password must be at least 6 characters"),
   role: z.enum(["ADMIN", "TEACHER", "STUDENT"]),
   phone: z.string().optional(),
   studentId: z.string().optional(),
@@ -43,6 +44,7 @@ export async function createUser(formData: FormData) {
   const parsed = userSchema.safeParse({
     name: formData.get("name"),
     email: formData.get("email"),
+    password: formData.get("password"),
     role: formData.get("role"),
     phone: formData.get("phone") || undefined,
     studentId: formData.get("studentId") || undefined,
@@ -69,10 +71,14 @@ export async function createUser(formData: FormData) {
     phone = student?.parentPhone;
   }
 
-  const user = await prisma.user.create({
+  const passwordHash = await bcrypt.hash(parsed.data.password, 10);
+
+  await prisma.user.create({
     data: {
       name: parsed.data.name,
       email: parsed.data.email.toLowerCase(),
+      passwordHash,
+      activatedAt: new Date(),
       role: parsed.data.role,
       phone,
       studentId: parsed.data.role === "STUDENT" ? parsed.data.studentId : undefined,
@@ -81,9 +87,6 @@ export async function createUser(formData: FormData) {
 
   void admin;
   revalidatePath("/settings");
-
-  // Never lets a WhatsApp delivery failure roll back or block account creation.
-  await createInvitation(user.id);
 }
 
 export async function deleteUser(id: string, currentUserId: string) {

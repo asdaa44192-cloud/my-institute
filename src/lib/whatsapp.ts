@@ -39,6 +39,33 @@ export function attendanceAlertMessage(params: {
   return `عزيزي ولي الأمر،\n\nنود إعلامكم بأن الطالب ${studentName} ${statusText} في مادة ${subject} بتاريخ ${date}.\n\nشكراً لكم.`;
 }
 
+export function studentWelcomeMessage(params: {
+  studentName: string;
+  grade: string;
+  parentPhone: string;
+  studentPhone?: string | null;
+  email?: string;
+  password?: string;
+}) {
+  const { studentName, grade, parentPhone, studentPhone, email, password } = params;
+
+  const details = [
+    `*الاسم:* ${studentName}`,
+    `*الصف:* ${grade}`,
+    `*هاتف ولي الأمر:* ${parentPhone}`,
+    studentPhone ? `*هاتف الطالب:* ${studentPhone}` : null,
+  ]
+    .filter(Boolean)
+    .join("\n");
+
+  const credentials =
+    email && password
+      ? `\n\n🔐 *بيانات الدخول إلى بوابة الطالب:*\n*البريد الإلكتروني:* ${email}\n*كلمة المرور:* ${password}\n\nيرجى الاحتفاظ بهذه البيانات في مكان آمن وعدم مشاركتها مع أحد.`
+      : "";
+
+  return `🎓 *أهلاً وسهلاً بكم في معهد القمة التعليمي*\n\nيسعدنا إعلامكم بتسجيل الطالب التالي:\n\n${details}${credentials}\n\nنتمنى للطالب ${studentName} عاماً دراسياً موفقاً! 🌟`;
+}
+
 export function receiptMessage(params: {
   studentName: string;
   amount: number;

@@ -1,6 +1,7 @@
 "use server";
 
 import { z } from "zod";
+import bcrypt from "bcryptjs";
 import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
 import { prisma } from "@/lib/prisma";
@@ -116,6 +117,84 @@ export async function createStudent(formData: FormData) {
   revalidatePath("/students");
   revalidatePath("/dashboard");
   redirect(`/students/${student.id}`);
+}
+
+/**
+ * Same as createStudent, but optionally provisions a STUDENT login in the same
+ * step (when email + password are both provided) and returns the created
+ * record — including the plaintext password — instead of redirecting, so the
+ * caller can offer it to the admin once (e.g. to relay over WhatsApp) before
+ * it's hashed away for good.
+ */
+export async function createStudentWithLogin(formData: FormData) {
+  await requireAdmin();
+
+  const parsed = studentSchema.safeParse({
+    name: formData.get("name"),
+    grade: formData.get("grade"),
+    studentPhone: formData.get("studentPhone") || undefined,
+    parentPhone: formData.get("parentPhone"),
+    totalFee: formData.get("totalFee"),
+  });
+  if (!parsed.success) {
+    throw new Error(parsed.error.issues[0]?.message ?? "Invalid student data");
+  }
+
+  const rawEmail = ((formData.get("email") as string | null) ?? "").trim();
+  const rawPassword = (formData.get("password") as string | null) ?? "";
+  const wantsLogin = rawEmail !== "" || rawPassword !== "";
+
+  let email: string | undefined;
+  let password: string | undefined;
+  if (wantsLogin) {
+    const emailParsed = z.string().email("البريد الإلكتروني غير صالح").safeParse(rawEmail);
+    if (!emailParsed.success) {
+      throw new Error(emailParsed.error.issues[0]?.message ?? "البريد الإلكتروني غير صالح");
+    }
+    const passwordParsed = z
+      .string()
+      .min(6, "كلمة المرور يجب أن تتكون من 6 أحرف على الأقل")
+      .safeParse(rawPassword);
+    if (!passwordParsed.success) {
+      throw new Error(passwordParsed.error.issues[0]?.message ?? "كلمة مرور غير صالحة");
+    }
+
+    email = emailParsed.data.toLowerCase();
+    password = passwordParsed.data;
+
+    const existing = await prisma.user.findUnique({ where: { email } });
+    if (existing) throw new Error("يوجد مستخدم بهذا البريد الإلكتروني مسبقاً");
+  }
+
+  const student = await prisma.student.create({ data: parsed.data });
+
+  if (email && password) {
+    const passwordHash = await bcrypt.hash(password, 10);
+    await prisma.user.create({
+      data: {
+        name: student.name,
+        email,
+        passwordHash,
+        activatedAt: new Date(),
+        role: "STUDENT",
+        studentId: student.id,
+      },
+    });
+  }
+
+  revalidatePath("/students");
+  revalidatePath("/dashboard");
+  revalidatePath("/settings");
+
+  return {
+    id: student.id,
+    name: student.name,
+    grade: student.grade,
+    parentPhone: student.parentPhone,
+    studentPhone: student.studentPhone,
+    email,
+    password,
+  };
 }
 
 export async function updateStudent(id: string, formData: FormData) {

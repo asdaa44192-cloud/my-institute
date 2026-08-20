@@ -5,7 +5,9 @@ import { Card } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Table, TableHeader, TableBody, TableRow, TableHead, TableCell } from "@/components/ui/table";
+import { WhatsAppButton } from "@/components/WhatsAppButton";
 import { formatCurrency } from "@/lib/utils";
+import { studentWelcomeMessage } from "@/lib/whatsapp";
 import { IRAQI_GRADE_LEVELS } from "@/lib/grades";
 
 export default async function StudentsPage({
@@ -76,7 +78,8 @@ export default async function StudentsPage({
               <TableHead className="h-auto py-3 ps-4">الاسم</TableHead>
               <TableHead className="h-auto py-3">الصف</TableHead>
               <TableHead className="h-auto py-3">هاتف ولي الأمر</TableHead>
-              {isAdmin && <TableHead className="h-auto py-3 pe-4 text-end">الرصيد المتبقي</TableHead>}
+              {isAdmin && <TableHead className="h-auto py-3">الرصيد المتبقي</TableHead>}
+              <TableHead className="h-auto py-3 pe-4 text-end">إجراءات</TableHead>
             </TableRow>
           </TableHeader>
           <TableBody>
@@ -90,7 +93,7 @@ export default async function StudentsPage({
                 <TableCell className="text-muted-foreground">{s.grade}</TableCell>
                 <TableCell className="text-muted-foreground">{s.parentPhone}</TableCell>
                 {isAdmin && (
-                  <TableCell className="pe-4 text-end">
+                  <TableCell>
                     {s.remaining > 0 ? (
                       <Badge color="red">{formatCurrency(s.remaining)}</Badge>
                     ) : (
@@ -98,11 +101,24 @@ export default async function StudentsPage({
                     )}
                   </TableCell>
                 )}
+                <TableCell className="pe-4 text-end">
+                  <WhatsAppButton
+                    compact
+                    phone={s.parentPhone}
+                    label="واتساب"
+                    message={studentWelcomeMessage({
+                      studentName: s.name,
+                      grade: s.grade,
+                      parentPhone: s.parentPhone,
+                      studentPhone: s.studentPhone,
+                    })}
+                  />
+                </TableCell>
               </TableRow>
             ))}
             {students.length === 0 && (
               <TableRow>
-                <TableCell colSpan={4} className="py-10 text-center text-muted-foreground">
+                <TableCell colSpan={5} className="py-10 text-center text-muted-foreground">
                   لا يوجد طلاب.
                 </TableCell>
               </TableRow>

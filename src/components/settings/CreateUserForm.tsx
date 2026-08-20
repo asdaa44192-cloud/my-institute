@@ -3,6 +3,7 @@
 import { useRef, useState, useTransition } from "react";
 import { Button } from "@/components/ui/button";
 import { createUser } from "@/lib/actions/users";
+import { generateRandomPassword } from "@/lib/utils";
 
 export function CreateUserForm({
   studentsWithoutLogin,
@@ -12,6 +13,7 @@ export function CreateUserForm({
   const formRef = useRef<HTMLFormElement>(null);
   const [error, setError] = useState<string | null>(null);
   const [role, setRole] = useState("TEACHER");
+  const [password, setPassword] = useState("");
   const [pending, startTransition] = useTransition();
 
   function handleSubmit(formData: FormData) {
@@ -21,6 +23,7 @@ export function CreateUserForm({
         await createUser(formData);
         formRef.current?.reset();
         setRole("TEACHER");
+        setPassword("");
       } catch (e) {
         setError(e instanceof Error ? e.message : "فشل إنشاء المستخدم");
       }
@@ -45,6 +48,26 @@ export function CreateUserForm({
           required
           className="w-full sm:w-56 rounded-md border border-input px-3 py-2 text-sm outline-none focus:border-ring focus:ring-1 focus:ring-ring"
         />
+      </div>
+      <div>
+        <label className="mb-1 block text-xs font-medium text-muted-foreground">كلمة المرور</label>
+        <div className="flex gap-2">
+          <input
+            name="password"
+            required
+            minLength={6}
+            value={password}
+            onChange={(e) => setPassword(e.target.value)}
+            className="w-full sm:w-40 rounded-md border border-input px-3 py-2 text-sm outline-none focus:border-ring focus:ring-1 focus:ring-ring"
+          />
+          <Button
+            type="button"
+            variant="secondary"
+            onClick={() => setPassword(generateRandomPassword())}
+          >
+            توليد كلمة مرور
+          </Button>
+        </div>
       </div>
       <div>
         <label className="mb-1 block text-xs font-medium text-muted-foreground">الدور</label>

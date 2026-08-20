@@ -1,6 +1,5 @@
 import { Card, CardHeader, CardBody } from "@/components/ui/card";
-import { StudentForm } from "@/components/students/StudentForm";
-import { createStudent } from "@/lib/actions/students";
+import { NewStudentForm } from "@/components/students/NewStudentForm";
 import { requireAdmin } from "@/lib/session";
 
 export default async function NewStudentPage() {
@@ -16,7 +15,7 @@ export default async function NewStudentPage() {
       <Card className="max-w-2xl">
         <CardHeader title="بيانات الطالب" />
         <CardBody>
-          <StudentForm action={createStudent} submitLabel="إنشاء الطالب" />
+          <NewStudentForm />
         </CardBody>
       </Card>
     </div>
