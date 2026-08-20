@@ -1,17 +1,20 @@
 "use server";
 
+import { cache } from "react";
 import { z } from "zod";
 import { revalidatePath } from "next/cache";
 import { prisma } from "@/lib/prisma";
 import { requireAdmin, requireUser } from "@/lib/session";
 
-export async function getTeacherSubjectIds(teacherId: string) {
+/** Memoized per-request: several actions on the same page (grades, students,
+ * attendance) each scope their query to a teacher's subjects independently. */
+export const getTeacherSubjectIds = cache(async (teacherId: string) => {
   const rows = await prisma.teacherSubject.findMany({
     where: { teacherId },
     select: { subjectId: true },
   });
   return rows.map((r) => r.subjectId);
-}
+});
 
 /** Throws unless the teacher is assigned to this subject. No-op for ADMIN. */
 export async function assertTeacherCanUseSubject(userId: string, role: string, subjectId: string) {

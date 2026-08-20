@@ -1,11 +1,14 @@
+import { cache } from "react";
 import { getServerSession } from "next-auth";
 import { redirect } from "next/navigation";
 import { authOptions } from "@/lib/auth";
 
-export async function getCurrentUser() {
+/** Memoized per-request: pages/actions call requireUser/requireStaff etc.
+ * repeatedly in the same render, and this avoids re-decoding the session each time. */
+export const getCurrentUser = cache(async () => {
   const session = await getServerSession(authOptions);
   return session?.user ?? null;
-}
+});
 
 /** Redirects to /login if not authenticated. Use in page/layout Server Components. */
 export async function requireUser() {

@@ -2,9 +2,9 @@
 
 import { z } from "zod";
 import { revalidatePath } from "next/cache";
+import { Prisma } from "@/generated/prisma/client";
 import { prisma } from "@/lib/prisma";
 import { requireStaff } from "@/lib/session";
-import { computeGradeStats } from "@/lib/grade-stats";
 import { assertTeacherCanUseSubject, getTeacherSubjectIds } from "@/lib/actions/subjects";
 
 const gradeSchema = z.object({
@@ -56,12 +56,22 @@ export async function getGradesBySubject(subjectId?: string) {
 export async function getGradeStatsBySubject() {
   const user = await requireStaff();
 
-  const teacherScope =
-    user.role === "TEACHER" ? { subjectId: { in: await getTeacherSubjectIds(user.id) } } : {};
+  let subjectFilter = Prisma.empty;
+  if (user.role === "TEACHER") {
+    const subjectIds = await getTeacherSubjectIds(user.id);
+    if (subjectIds.length === 0) return [];
+    subjectFilter = Prisma.sql`WHERE g.subjectId IN (${Prisma.join(subjectIds)})`;
+  }
 
-  const records = await prisma.gradeRecord.findMany({
-    where: teacherScope,
-    select: { subject: { select: { name: true } }, score: true, maxScore: true },
-  });
-  return computeGradeStats(records.map((r) => ({ subject: r.subject.name, score: r.score, maxScore: r.maxScore })));
+  // Aggregate the average per subject in the database instead of pulling
+  // every grade record into memory to reduce it in JS.
+  const rows = await prisma.$queryRaw<{ subject: string; average: number }[]>`
+    SELECT s.name as subject, AVG(g.score * 100.0 / g.maxScore) as average
+    FROM GradeRecord g
+    JOIN Subject s ON s.id = g.subjectId
+    ${subjectFilter}
+    GROUP BY s.name
+    ORDER BY s.name ASC
+  `;
+  return rows.map((r) => ({ subject: r.subject, average: Math.round(r.average) }));
 }
