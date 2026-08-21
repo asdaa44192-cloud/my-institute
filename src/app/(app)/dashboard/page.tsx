@@ -26,7 +26,7 @@ export default async function DashboardPage() {
     <div dir="rtl" className="space-y-6 text-right">
       <div className="flex items-center gap-4">
         <Image
-          src="/logo.jpg"
+          src="/logo-og.png"
           alt="شعار معهد القمة التعليمي"
           width={64}
           height={64}

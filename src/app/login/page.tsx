@@ -47,7 +47,7 @@ export default function LoginPage() {
       <div className="w-full max-w-sm rounded-xl border border-border bg-white p-8 shadow-sm">
         <div className="flex items-center gap-3">
           <Image
-            src="/logo.jpg"
+            src="/logo-og.png"
             alt="شعار معهد القمة التعليمي"
             width={48}
             height={48}

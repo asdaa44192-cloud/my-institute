@@ -23,7 +23,7 @@ export function MobileNav({
       <div className="no-print flex items-center justify-between border-b border-border bg-card px-4 py-3 lg:hidden">
         <div className="flex items-center gap-2">
           <Image
-            src="/logo.jpg"
+            src="/logo-og.png"
             alt="شعار معهد القمة التعليمي"
             width={28}
             height={28}
@@ -42,7 +42,7 @@ export function MobileNav({
         <SheetHeader className="border-b border-border text-right">
           <SheetTitle className="flex items-center gap-2.5 text-right">
             <Image
-              src="/logo.jpg"
+              src="/logo-og.png"
               alt="شعار معهد القمة التعليمي"
               width={32}
               height={32}

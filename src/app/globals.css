@@ -55,11 +55,12 @@
 }
 
 /*
- * Educational palette: blue (trust/institutional) as primary, warm amber as a
- * sparing accent, emerald/red/amber kept for paid/present/overdue semantics
- * (unchanged — already correct throughout the app). Dark mode intentionally
- * not themed yet (not requested); the .dark block below is shadcn's default
- * so it's a cheap follow-up later, not a broken state.
+ * Institute palette: navy (trust/institutional) as primary for structural UI
+ * (buttons, sidebar, links), matched with the logo's red as the destructive/
+ * accent color. Emerald kept for the "paid"/"present" semantics elsewhere in
+ * the app (unchanged — already correct). Dark mode intentionally not themed
+ * yet (not requested); the .dark block below is shadcn's default so it's a
+ * cheap follow-up later, not a broken state.
  */
 :root {
   --background: #f8fafc;
@@ -68,19 +69,19 @@
   --card-foreground: #0f172a;
   --popover: #ffffff;
   --popover-foreground: #0f172a;
-  --primary: #2563eb;
+  --primary: #1e3a5f;
   --primary-foreground: #ffffff;
-  --secondary: #f1f5f9;
-  --secondary-foreground: #0f172a;
+  --secondary: #eef2f7;
+  --secondary-foreground: #1e3a5f;
   --muted: #f1f5f9;
   --muted-foreground: #64748b;
-  --accent: #fef3c7;
-  --accent-foreground: #92400e;
+  --accent: #fee2e2;
+  --accent-foreground: #991b1b;
   --destructive: #dc2626;
   --border: #e2e8f0;
   --input: #e2e8f0;
-  --ring: #2563eb;
-  --chart-1: #2563eb;
+  --ring: #1e3a5f;
+  --chart-1: #1e3a5f;
   --chart-2: #f59e0b;
   --chart-3: #059669;
   --chart-4: #7c3aed;
@@ -88,12 +89,12 @@
   --radius: 0.625rem;
   --sidebar: #ffffff;
   --sidebar-foreground: #0f172a;
-  --sidebar-primary: #2563eb;
+  --sidebar-primary: #1e3a5f;
   --sidebar-primary-foreground: #ffffff;
-  --sidebar-accent: #eff6ff;
-  --sidebar-accent-foreground: #1d4ed8;
+  --sidebar-accent: #fef2f2;
+  --sidebar-accent-foreground: #991b1b;
   --sidebar-border: #e2e8f0;
-  --sidebar-ring: #2563eb;
+  --sidebar-ring: #1e3a5f;
 }
 
 .dark {
@@ -155,4 +156,16 @@
 
 .animate-stagger-in {
   animation: stagger-in 0.4s ease-out both;
+}
+
+.watermark-bg {
+  position: fixed;
+  inset: 0;
+  z-index: -1;
+  pointer-events: none;
+  background-image: url("/logo-mark.png");
+  background-repeat: no-repeat;
+  background-position: center;
+  background-size: min(60vw, 640px);
+  opacity: 0.05;
 }

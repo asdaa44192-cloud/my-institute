@@ -41,7 +41,7 @@ export function AppShell({
       <aside className="no-print hidden w-64 shrink-0 flex-col border-e border-border bg-card py-5 lg:flex">
         <div className="mb-6 flex items-center gap-2.5 px-5">
           <Image
-            src="/logo.jpg"
+            src="/logo-og.png"
             alt="شعار معهد القمة التعليمي"
             width={36}
             height={36}
