@@ -1,3 +1,6 @@
+const SITE_URL = "https://my-institute-app-al-qimah.vercel.app";
+const SITE_FOOTER = `\n\n🌐 *الموقع الرسمي:* ${SITE_URL}`;
+
 /**
  * Builds a wa.me deep link that opens WhatsApp with a pre-filled message.
  * Accepts loosely formatted phone numbers and strips everything but digits.
@@ -27,7 +30,7 @@ export function paymentReminderMessage(params: {
   const { studentName, grade, remaining } = params;
   return `عزيزي ولي الأمر،\n\nهذا تذكير بأن الطالب ${studentName} (${grade}) لديه رصيد مستحق من الرسوم الدراسية بقيمة $${remaining.toFixed(
     2
-  )}. يرجى ترتيب الدفع في أقرب وقت ممكن.\n\nشكراً لكم.`;
+  )}. يرجى ترتيب الدفع في أقرب وقت ممكن.\n\nشكراً لكم.${SITE_FOOTER}`;
 }
 
 export function attendanceAlertMessage(params: {
@@ -39,7 +42,7 @@ export function attendanceAlertMessage(params: {
   const { studentName, date, status, subject } = params;
   const statusText =
     status === "PRESENT" ? "كان حاضراً" : status === "LATE" ? "وصل متأخراً" : "كان غائباً";
-  return `عزيزي ولي الأمر،\n\nنود إعلامكم بأن الطالب ${studentName} ${statusText} في مادة ${subject} بتاريخ ${date}.\n\nشكراً لكم.`;
+  return `عزيزي ولي الأمر،\n\nنود إعلامكم بأن الطالب ${studentName} ${statusText} في مادة ${subject} بتاريخ ${date}.\n\nشكراً لكم.${SITE_FOOTER}`;
 }
 
 export function studentWelcomeMessage(params: {
@@ -67,7 +70,7 @@ export function studentWelcomeMessage(params: {
       }\n\nيرجى الاحتفاظ بهذه البيانات في مكان آمن وعدم مشاركتها مع أحد.`
     : "";
 
-  return `🎓 *أهلاً وسهلاً بكم في معهد القمة التعليمي*\n\nيسعدنا إعلامكم بتسجيل الطالب التالي:\n\n${details}${credentials}\n\nنتمنى للطالب ${studentName} عاماً دراسياً موفقاً! 🌟`;
+  return `🎓 *أهلاً وسهلاً بكم في معهد القمة التعليمي*\n\nيسعدنا إعلامكم بتسجيل الطالب التالي:\n\n${details}${credentials}\n\nنتمنى للطالب ${studentName} عاماً دراسياً موفقاً! 🌟${SITE_FOOTER}`;
 }
 
 export function studentCredentialsMessage(params: {
@@ -77,7 +80,7 @@ export function studentCredentialsMessage(params: {
   password: string;
 }) {
   const { studentName, grade, parentPhone, password } = params;
-  return `مرحباً بك في معهد القمة ✨\n\nإليك تفاصيل حسابك:\n• اسم الطالب: ${studentName}\n• الصف: ${grade}\n• هاتف ولي الأمر: ${parentPhone}\n• كلمة المرور: ${password}\n\nنتمنى لك التوفيق والنجاح!`;
+  return `مرحباً بك في معهد القمة ✨\n\nإليك تفاصيل حسابك:\n• اسم الطالب: ${studentName}\n• الصف: ${grade}\n• هاتف ولي الأمر: ${parentPhone}\n• كلمة المرور: ${password}\n\nنتمنى لك التوفيق والنجاح!${SITE_FOOTER}`;
 }
 
 export function receiptMessage(params: {
@@ -91,5 +94,5 @@ export function receiptMessage(params: {
     2
   )} عن الطالب ${studentName} بتاريخ ${date}. الرصيد المتبقي: $${remaining.toFixed(
     2
-  )}.\n\nشكراً لدفعتكم.`;
+  )}.\n\nشكراً لدفعتكم.${SITE_FOOTER}`;
 }
