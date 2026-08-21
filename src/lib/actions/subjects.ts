@@ -5,6 +5,7 @@ import { z } from "zod";
 import { revalidatePath } from "next/cache";
 import { prisma } from "@/lib/prisma";
 import { requireAdmin, requireUser } from "@/lib/session";
+import { toSafeError } from "@/lib/db-errors";
 
 /** Memoized per-request: several actions on the same page (grades, students,
  * attendance) each scope their query to a teacher's subjects independently. */
@@ -58,7 +59,14 @@ export async function createSubject(formData: FormData) {
   const existing = await prisma.subject.findUnique({ where: { name: parsed.data.name } });
   if (existing) throw new Error("A subject with that name already exists");
 
-  await prisma.subject.create({ data: { name: parsed.data.name } });
+  try {
+    await prisma.subject.create({ data: { name: parsed.data.name } });
+  } catch (e) {
+    // The findUnique above closes the common case; this catches the rare
+    // concurrent-create race the pre-check can't, without leaking Prisma's
+    // raw constraint-violation message (which names the column).
+    throw toSafeError(e, "A subject with that name already exists");
+  }
   revalidatePath("/subjects");
 }
 

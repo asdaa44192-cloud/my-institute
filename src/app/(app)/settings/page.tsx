@@ -1,5 +1,5 @@
 import { listUsers } from "@/lib/actions/users";
-import { listStudentsWithoutLogin } from "@/lib/actions/students";
+import { listSubjects } from "@/lib/actions/subjects";
 import { requireAdmin } from "@/lib/session";
 import { Card, CardHeader, CardBody } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
@@ -20,7 +20,7 @@ function accountStatus(u: { hasPassword: boolean; inviteTokenExpiresAt: Date | n
 
 export default async function SettingsPage() {
   const currentUser = await requireAdmin();
-  const [users, studentsWithoutLogin] = await Promise.all([listUsers(), listStudentsWithoutLogin()]);
+  const [users, subjects] = await Promise.all([listUsers(), listSubjects()]);
 
   return (
     <div dir="rtl" className="space-y-6 text-right">
@@ -32,7 +32,7 @@ export default async function SettingsPage() {
       <Card>
         <CardHeader title="إضافة مستخدم" subtitle="منح صلاحية مسؤول أو معلم أو طالب للنظام" />
         <CardBody>
-          <CreateUserForm studentsWithoutLogin={studentsWithoutLogin} />
+          <CreateUserForm subjects={subjects} />
         </CardBody>
       </Card>
 
@@ -60,12 +60,17 @@ export default async function SettingsPage() {
                     {u.name}
                     {u.student && <span className="text-xs font-normal text-muted-foreground"> ({u.student.name})</span>}
                   </TableCell>
-                  <TableCell className="text-muted-foreground">{u.email}</TableCell>
+                  <TableCell className="text-muted-foreground">{u.email ?? "—"}</TableCell>
                   <TableCell className="text-muted-foreground">{phone ?? "—"}</TableCell>
                   <TableCell>
-                    <Badge color={u.role === "ADMIN" ? "indigo" : u.role === "TEACHER" ? "slate" : "amber"}>
-                      {ROLE_LABELS[u.role]}
-                    </Badge>
+                    <div className="flex flex-wrap items-center gap-1.5">
+                      <Badge color={u.role === "ADMIN" ? "indigo" : u.role === "TEACHER" ? "slate" : "amber"}>
+                        {ROLE_LABELS[u.role]}
+                      </Badge>
+                      {u.student && (
+                        <Badge color="slate">{u.student.grade || "بلا صف"}</Badge>
+                      )}
+                    </div>
                   </TableCell>
                   <TableCell>
                     <Badge color={status.color} pulse={status.pulse}>

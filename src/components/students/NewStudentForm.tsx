@@ -15,7 +15,7 @@ type CreatedStudent = {
   grade: string;
   parentPhone: string;
   studentPhone?: string | null;
-  email?: string;
+  loginPhone?: string;
   password?: string;
 };
 
@@ -44,7 +44,7 @@ export function NewStudentForm() {
       <div className="space-y-4 text-right">
         <div className="rounded-md bg-emerald-50 p-4 text-sm text-emerald-800 ring-1 ring-inset ring-emerald-200">
           تم إنشاء الطالب <span className="font-semibold">{created.name}</span> بنجاح
-          {created.email ? " مع حساب دخول." : "."}
+          {created.loginPhone ? " مع حساب دخول." : "."}
         </div>
 
         <div className="flex flex-wrap items-center gap-3">
@@ -56,7 +56,7 @@ export function NewStudentForm() {
               grade: created.grade,
               parentPhone: created.parentPhone,
               studentPhone: created.studentPhone,
-              email: created.email,
+              loginPhone: created.loginPhone,
               password: created.password,
             })}
           />
@@ -141,11 +141,11 @@ export function NewStudentForm() {
         {withLogin && (
           <div className="mt-3 grid grid-cols-1 gap-4 sm:grid-cols-2">
             <div>
-              <label className="mb-1 block text-sm font-medium text-foreground">البريد الإلكتروني</label>
+              <label className="mb-1 block text-sm font-medium text-foreground">رقم الهاتف لتسجيل الدخول</label>
               <input
-                type="email"
-                name="email"
+                name="loginPhone"
                 required={withLogin}
+                placeholder="+1555..."
                 className="w-full rounded-md border border-input px-3 py-2 text-sm outline-none focus:border-ring focus:ring-1 focus:ring-ring"
               />
             </div>
@@ -161,7 +161,7 @@ export function NewStudentForm() {
                   className="w-full rounded-md border border-input px-3 py-2 text-sm outline-none focus:border-ring focus:ring-1 focus:ring-ring"
                 />
                 <Button type="button" variant="secondary" onClick={() => setPassword(generateRandomPassword())}>
-                  توليد كلمة مرور
+                  توليد كلمة مرور عشوائية
                 </Button>
               </div>
             </div>

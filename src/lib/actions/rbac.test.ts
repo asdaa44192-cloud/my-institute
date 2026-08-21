@@ -20,8 +20,17 @@ vi.mock("next/cache", () => ({
 
 import { getServerSession } from "next-auth";
 import { prisma } from "@/lib/prisma";
-import { createStudent, updateStudent, deactivateStudent, getStudents, getStudentById } from "@/lib/actions/students";
-import { addPayment, deletePayment, getAllPayments } from "@/lib/actions/payments";
+import {
+  createStudent,
+  createStudentWithLogin,
+  updateStudent,
+  deactivateStudent,
+  deleteStudent,
+  getStudents,
+  getStudentById,
+  getMyStudentProfile,
+} from "@/lib/actions/students";
+import { addPayment, deletePayment, getAllPayments, getFinanceData, saveStudentPayment } from "@/lib/actions/payments";
 import { addGrade } from "@/lib/actions/grades";
 import { saveAttendance } from "@/lib/actions/attendance";
 import { createUser, deleteUser, listUsers } from "@/lib/actions/users";
@@ -146,6 +155,86 @@ describe("deactivateStudent (admin-only; redirects on both success and failure)"
   });
 });
 
+describe("createStudentWithLogin (admin-only; phone + password, no email)", () => {
+  const formWithLogin = (overrides: Record<string, string> = {}) =>
+    formData({
+      name: "New Student",
+      grade: "Grade 5",
+      parentPhone: "+15550000000",
+      totalFee: "1000",
+      loginPhone: "+1 555 123 4567",
+      password: "testpass123",
+      ...overrides,
+    });
+
+  it("creates the student and a phone-based login, with no email set", async () => {
+    asAdmin();
+    const result = await createStudentWithLogin(formWithLogin());
+    expect(result.loginPhone).toBe("+1 555 123 4567");
+
+    const login = await prisma.user.findFirst({ where: { studentId: result.id } });
+    expect(login?.role).toBe("STUDENT");
+    expect(login?.email).toBeNull();
+    expect(login?.phone).toBe("+1 555 123 4567");
+    expect(login?.passwordHash).toBeTruthy();
+  });
+
+  it("creates the student profile only when no login phone/password is given", async () => {
+    asAdmin();
+    const result = await createStudentWithLogin(
+      formData({ name: "No Login", grade: "Grade 5", parentPhone: "+15550000000", totalFee: "1000" })
+    );
+    expect(result.loginPhone).toBeUndefined();
+    expect(await prisma.user.count()).toBe(0);
+  });
+
+  it("rejects a login phone that's already in use, tolerating different formatting", async () => {
+    asAdmin();
+    await createStudentWithLogin(formWithLogin());
+    await expect(
+      createStudentWithLogin(formWithLogin({ name: "Second Student", loginPhone: "15551234567" }))
+    ).rejects.toThrow("يوجد مستخدم بهذا رقم الهاتف مسبقاً");
+  });
+
+  it("blocks teachers from creating a student login", async () => {
+    asTeacher();
+    await expect(createStudentWithLogin(formWithLogin())).rejects.toThrow("REDIRECT:/dashboard");
+    expect(await prisma.student.count()).toBe(0);
+  });
+});
+
+describe("deleteStudent (admin-only; permanently removes the student and their login)", () => {
+  it("blocks teachers and leaves the student intact", async () => {
+    const student = await seedStudent();
+    asTeacher();
+    await expect(deleteStudent(student.id)).rejects.toThrow("REDIRECT:/dashboard");
+    expect(await prisma.student.findUnique({ where: { id: student.id } })).not.toBeNull();
+  });
+
+  it("permanently deletes the student and cascades related records", async () => {
+    const student = await seedStudent();
+    await prisma.payment.create({ data: { studentId: student.id, amount: 50 } });
+    asAdmin();
+
+    await deleteStudent(student.id);
+
+    expect(await prisma.student.findUnique({ where: { id: student.id } })).toBeNull();
+    expect(await prisma.payment.count()).toBe(0);
+  });
+
+  it("also deletes the student's login account, not just detaching it", async () => {
+    const student = await seedStudent();
+    const login = await prisma.user.create({
+      data: { name: student.name, phone: "+15559998888", passwordHash: "x", role: "STUDENT", studentId: student.id },
+    });
+    asAdmin();
+
+    await deleteStudent(student.id);
+
+    expect(await prisma.user.findUnique({ where: { id: login.id } })).toBeNull();
+  });
+});
+
 describe("getStudents (staff-only; scoped to a teacher's assigned subjects)", () => {
   it("blocks anonymous callers", async () => {
     asAnonymous();
@@ -215,6 +304,19 @@ describe("getStudentById (row-level scoping)", () => {
   });
 });
 
+describe("getMyStudentProfile (a STUDENT with no linked profile is a broken invariant, not a redirect loop)", () => {
+  it("redirects to /login instead of back to /dashboard — its only caller — when studentId is missing", async () => {
+    // Nothing in the app can produce a STUDENT user with no linked Student
+    // profile, but if that ever happened (e.g. a role edited directly in the
+    // DB), redirecting to /dashboard here would loop forever, since /dashboard
+    // is the only place that calls this.
+    mockSession.mockResolvedValue({
+      user: { id: "broken-1", role: "STUDENT", studentId: null, name: "Broken", email: "broken@test.com" },
+    } as never);
+    await expect(getMyStudentProfile()).rejects.toThrow("REDIRECT:/login");
+  });
+});
+
 describe("addPayment (admin-only)", () => {
   it("blocks teachers and records nothing", async () => {
     const student = await seedStudent();
@@ -269,6 +371,56 @@ describe("getAllPayments (admin-only read — the financial ledger itself)", () 
   it("allows admin to read the ledger", async () => {
     asAdmin();
     await expect(getAllPayments()).resolves.toEqual([]);
+  });
+});
+
+describe("getFinanceData (admin-only read — the finance table)", () => {
+  it("blocks teachers from reading finance data", async () => {
+    asTeacher();
+    await expect(getFinanceData()).rejects.toThrow("REDIRECT:/dashboard");
+  });
+
+  it("allows admin and returns computed totals per student", async () => {
+    const student = await seedStudent({ totalFee: 300 });
+    await prisma.payment.create({ data: { studentId: student.id, amount: 120 } });
+    asAdmin();
+    const [row] = await getFinanceData();
+    expect(row).toMatchObject({ id: student.id, totalFee: 300, paid: 120, remaining: 180, paymentCount: 1 });
+  });
+});
+
+describe("saveStudentPayment (admin-only fee adjustment + payment)", () => {
+  it("blocks teachers and changes nothing", async () => {
+    const student = await seedStudent({ totalFee: 300 });
+    asTeacher();
+    const fd = formData({ studentId: student.id, totalFee: "250", amount: "100", date: "2026-08-19" });
+    await expect(saveStudentPayment(fd)).rejects.toThrow("REDIRECT:/dashboard");
+    expect(await prisma.payment.count()).toBe(0);
+    expect((await prisma.student.findUniqueOrThrow({ where: { id: student.id } })).totalFee).toBe(300);
+  });
+
+  it("allows admin to adjust the fee and record a payment in one call", async () => {
+    const student = await seedStudent({ totalFee: 300 });
+    asAdmin();
+    const fd = formData({ studentId: student.id, totalFee: "250", amount: "100", date: "2026-08-19", note: "قسط" });
+    await saveStudentPayment(fd);
+
+    const updated = await prisma.student.findUniqueOrThrow({ where: { id: student.id } });
+    expect(updated.totalFee).toBe(250);
+    expect(await prisma.payment.count()).toBe(1);
+    const payment = await prisma.payment.findFirstOrThrow({ where: { studentId: student.id } });
+    expect(payment.amount).toBe(100);
+    expect(payment.note).toBe("قسط");
+  });
+
+  it("allows adjusting the fee alone, without a new payment", async () => {
+    const student = await seedStudent({ totalFee: 300 });
+    asAdmin();
+    const fd = formData({ studentId: student.id, totalFee: "200" });
+    await saveStudentPayment(fd);
+
+    expect((await prisma.student.findUniqueOrThrow({ where: { id: student.id } })).totalFee).toBe(200);
+    expect(await prisma.payment.count()).toBe(0);
   });
 });
 
@@ -375,13 +527,12 @@ describe("subject assignment/enrollment (admin-only)", () => {
   });
 });
 
-describe("user management (admin-only)", () => {
+describe("user management (admin-only; single-step registration for any role)", () => {
   const newTeacherForm = () =>
     formData({
       name: "New Person",
-      email: "new-person@test.com",
+      identifier: "new-person@test.com",
       password: "testpass123",
-      phone: "+15550000000",
       role: "TEACHER",
     });
 
@@ -420,23 +571,23 @@ describe("user management (admin-only)", () => {
     asAdmin();
     const fd = formData({
       name: "New Person",
-      email: "new-person@test.com",
+      identifier: "new-person@test.com",
       password: "abc",
-      phone: "+15550000000",
       role: "TEACHER",
     });
     await expect(createUser(fd)).rejects.toThrow("Password must be at least 6 characters");
   });
 
-  it("requires a phone number for a non-student account", async () => {
+  it("requires an email or phone identifier", async () => {
     asAdmin();
-    const fd = formData({
-      name: "New Person",
-      email: "new-person@test.com",
-      password: "testpass123",
-      role: "TEACHER",
-    });
-    await expect(createUser(fd)).rejects.toThrow("Phone number is required");
+    const fd = formData({ name: "New Person", identifier: "", password: "testpass123", role: "TEACHER" });
+    await expect(createUser(fd)).rejects.toThrow("Email or phone number is required");
+  });
+
+  it("rejects an identifier that's neither a valid email nor a valid phone", async () => {
+    asAdmin();
+    const fd = formData({ name: "New Person", identifier: "abc", password: "testpass123", role: "TEACHER" });
+    await expect(createUser(fd)).rejects.toThrow("رقم هاتف غير صالح");
   });
 
   it("prevents an admin from deleting their own account", async () => {
@@ -448,32 +599,136 @@ describe("user management (admin-only)", () => {
     expect(await prisma.user.findUnique({ where: { id: self.id } })).not.toBeNull();
   });
 
-  it("requires a linked student when creating a STUDENT login", async () => {
+  it("creates a STUDENT login and its Student profile in one step, no pre-existing profile needed", async () => {
     asAdmin();
     const fd = formData({
-      name: "Student Login",
-      email: "student@test.com",
+      name: "New Student",
+      identifier: "student@test.com",
       password: "testpass123",
       role: "STUDENT",
-    });
-    await expect(createUser(fd)).rejects.toThrow("Select which student this login belongs to");
-  });
-
-  it("creates a STUDENT login linked to an existing student", async () => {
-    const student = await seedStudent();
-    asAdmin();
-    const fd = formData({
-      name: "Student Login",
-      email: "student@test.com",
-      password: "testpass123",
-      role: "STUDENT",
-      studentId: student.id,
+      grade: "الخامس ابتدائي",
     });
     await createUser(fd);
+
     const created = await prisma.user.findUnique({ where: { email: "student@test.com" } });
-    expect(created?.studentId).toBe(student.id);
-    expect(created?.phone).toBe(student.parentPhone);
-    expect(created?.passwordHash).not.toBeNull();
+    expect(created?.role).toBe("STUDENT");
+    expect(created?.studentId).toBeTruthy();
+
+    const student = await prisma.student.findUnique({ where: { id: created!.studentId! } });
+    expect(student?.name).toBe("New Student");
+    expect(student?.grade).toBe("الخامس ابتدائي");
+  });
+
+  it("requires a grade level when creating a STUDENT", async () => {
+    asAdmin();
+    const fd = formData({
+      name: "New Student",
+      identifier: "student@test.com",
+      password: "testpass123",
+      role: "STUDENT",
+    });
+    await expect(createUser(fd)).rejects.toThrow("الصف الدراسي مطلوب");
+    expect(await prisma.user.count()).toBe(0);
+    expect(await prisma.student.count()).toBe(0);
+  });
+
+  it("does not require a grade level for TEACHER or ADMIN roles", async () => {
+    asAdmin();
+    await createUser(newTeacherForm());
+    expect(await prisma.user.findUnique({ where: { email: "new-person@test.com" } })).not.toBeNull();
+  });
+
+  it("creates a STUDENT login with a phone number identifier when no email is given", async () => {
+    asAdmin();
+    const fd = formData({
+      name: "New Student",
+      identifier: "+1 555 987 6543",
+      password: "testpass123",
+      role: "STUDENT",
+      grade: "الخامس ابتدائي",
+    });
+    await createUser(fd);
+
+    const created = await prisma.user.findFirst({ where: { role: "STUDENT" } });
+    expect(created?.email).toBeNull();
+    expect(created?.phone).toBe("+1 555 987 6543");
+    expect(created?.studentId).toBeTruthy();
+  });
+
+  it("rejects a phone identifier already used by another login", async () => {
+    asAdmin();
+    await createUser(
+      formData({
+        name: "First Login",
+        identifier: "+15559876543",
+        password: "testpass123",
+        role: "STUDENT",
+        grade: "الخامس ابتدائي",
+      })
+    );
+
+    await expect(
+      createUser(
+        formData({ name: "Second Login", identifier: "1 (555) 987-6543", password: "testpass123", role: "TEACHER" })
+      )
+    ).rejects.toThrow("يوجد مستخدم بهذا رقم الهاتف مسبقاً");
+  });
+
+  it("enrolls a new student in the courses checked during registration", async () => {
+    const math = await seedSubject("Mathematics");
+    const science = await seedSubject("Science");
+    asAdmin();
+
+    const fd = formData({
+      name: "New Student",
+      identifier: "student@test.com",
+      password: "testpass123",
+      role: "STUDENT",
+      grade: "الخامس ابتدائي",
+    });
+    fd.append("subjectIds", math.id);
+    fd.append("subjectIds", science.id);
+    await createUser(fd);
+
+    const created = await prisma.user.findUnique({ where: { email: "student@test.com" } });
+    const enrollments = await prisma.studentSubject.findMany({ where: { studentId: created!.studentId! } });
+    expect(enrollments.map((e) => e.subjectId).sort()).toEqual([math.id, science.id].sort());
+  });
+
+  it("assigns a new teacher to the courses checked during registration", async () => {
+    const math = await seedSubject("Mathematics");
+    const science = await seedSubject("Science");
+    asAdmin();
+
+    const fd = formData({
+      name: "New Teacher",
+      identifier: "teacher@test.com",
+      password: "testpass123",
+      role: "TEACHER",
+    });
+    fd.append("subjectIds", math.id);
+    fd.append("subjectIds", science.id);
+    await createUser(fd);
+
+    const created = await prisma.user.findUnique({ where: { email: "teacher@test.com" } });
+    const assignments = await prisma.teacherSubject.findMany({ where: { teacherId: created!.id } });
+    expect(assignments.map((a) => a.subjectId).sort()).toEqual([math.id, science.id].sort());
+    expect(created?.studentId).toBeNull();
+  });
+
+  it("skips enrollment cleanly when no courses are checked", async () => {
+    asAdmin();
+    await createUser(
+      formData({
+        name: "New Student",
+        identifier: "student2@test.com",
+        password: "testpass123",
+        role: "STUDENT",
+        grade: "الخامس ابتدائي",
+      })
+    );
+
+    expect(await prisma.studentSubject.count()).toBe(0);
   });
 });
 
@@ -523,8 +778,8 @@ describe("invitations (createInvitation admin-only; completeInvitation is public
     asAdmin();
     const { token } = await createInvitation(target.id);
 
-    const { email } = await completeInvitation(token, "newpassword123");
-    expect(email).toBe("target@test.com");
+    const { identifier } = await completeInvitation(token, "newpassword123");
+    expect(identifier).toBe("target@test.com");
 
     const updated = await prisma.user.findUnique({ where: { id: target.id } });
     expect(updated?.passwordHash).toBeTruthy();

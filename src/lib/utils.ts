@@ -34,6 +34,28 @@ export function daysOverdue(lastPaymentOrEnroll: Date) {
   return Math.floor(ms / (1000 * 60 * 60 * 24));
 }
 
+export function normalizePhoneDigits(phone: string) {
+  return phone.replace(/[^\d]/g, "");
+}
+
+const RAW_DB_ERROR_PATTERN = /prisma|constraint failed|invocation:|\bsqlite/i;
+
+/**
+ * Defense-in-depth for client-facing error boundaries (error.tsx). Next.js
+ * already redacts most Server Component errors to a generic message in
+ * production, and the actions that can hit a raw Prisma constraint error
+ * already catch and translate it — this is a last-resort check in case some
+ * other, unanticipated path lets one through, so a raw "Unique constraint
+ * failed on the fields: (`email`)"-style message never reaches the client.
+ * Deliberately dependency-free (no Prisma import) since error.tsx is a
+ * Client Component.
+ */
+export function redactIfLooksLikeDatabaseError(message: string) {
+  return RAW_DB_ERROR_PATTERN.test(message)
+    ? "حدث خطأ غير متوقع. الرجاء المحاولة مرة أخرى أو التواصل مع الدعم الفني."
+    : message;
+}
+
 const PASSWORD_CHARS = "ABCDEFGHJKLMNPQRSTUVWXYZabcdefghijkmnpqrstuvwxyz23456789!@#$%";
 
 /** Generates a random password using the Web Crypto API (available in both the browser and Node). */

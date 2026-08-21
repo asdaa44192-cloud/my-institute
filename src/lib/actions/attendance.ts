@@ -15,6 +15,7 @@ export async function getStudentsByGrade(grade: string) {
   await requireStaff();
   return prisma.student.findMany({
     where: { grade, active: true },
+    select: { id: true, name: true, parentPhone: true },
     orderBy: { name: "asc" },
   });
 }
@@ -24,8 +25,13 @@ export async function getAttendanceForClass(grade: string, subjectId: string, da
   await assertTeacherCanUseSubject(user.id, user.role, subjectId);
 
   const date = startOfDay(dateStr);
+  // Only select what the client (AttendanceGrid, a "use client" component) actually
+  // renders — this return value is a Server Action result sent straight to the
+  // browser, so fields like totalFee must not be fetched here even though Prisma
+  // would happily include them.
   const students = await prisma.student.findMany({
     where: { grade, active: true, subjects: { some: { subjectId } } },
+    select: { id: true, name: true, parentPhone: true },
     orderBy: { name: "asc" },
   });
   const records = await prisma.attendanceRecord.findMany({

@@ -1,11 +1,14 @@
 /**
  * Builds a wa.me deep link that opens WhatsApp with a pre-filled message.
  * Accepts loosely formatted phone numbers and strips everything but digits.
+ * Local Iraqi numbers (starting with a trunk "0") get the 964 country code
+ * substituted in, since wa.me requires the number in full international form.
  */
 export function whatsappLink(phone: string, message: string) {
   const digits = phone.replace(/[^\d]/g, "");
+  const clean = digits.startsWith("0") ? `964${digits.slice(1)}` : digits;
   const text = encodeURIComponent(message);
-  return `https://wa.me/${digits}?text=${text}`;
+  return `https://wa.me/${clean}?text=${text}`;
 }
 
 export function inviteMessage(params: { name: string; url: string; isReset: boolean }) {
@@ -44,10 +47,10 @@ export function studentWelcomeMessage(params: {
   grade: string;
   parentPhone: string;
   studentPhone?: string | null;
-  email?: string;
+  loginPhone?: string;
   password?: string;
 }) {
-  const { studentName, grade, parentPhone, studentPhone, email, password } = params;
+  const { studentName, grade, parentPhone, studentPhone, loginPhone, password } = params;
 
   const details = [
     `*الاسم:* ${studentName}`,
@@ -58,12 +61,23 @@ export function studentWelcomeMessage(params: {
     .filter(Boolean)
     .join("\n");
 
-  const credentials =
-    email && password
-      ? `\n\n🔐 *بيانات الدخول إلى بوابة الطالب:*\n*البريد الإلكتروني:* ${email}\n*كلمة المرور:* ${password}\n\nيرجى الاحتفاظ بهذه البيانات في مكان آمن وعدم مشاركتها مع أحد.`
-      : "";
+  const credentials = loginPhone
+    ? `\n\n🔐 *بيانات الدخول إلى بوابة الطالب:*\n*رقم الهاتف لتسجيل الدخول:* ${loginPhone}${
+        password ? `\n*كلمة المرور:* ${password}` : ""
+      }\n\nيرجى الاحتفاظ بهذه البيانات في مكان آمن وعدم مشاركتها مع أحد.`
+    : "";
 
   return `🎓 *أهلاً وسهلاً بكم في معهد القمة التعليمي*\n\nيسعدنا إعلامكم بتسجيل الطالب التالي:\n\n${details}${credentials}\n\nنتمنى للطالب ${studentName} عاماً دراسياً موفقاً! 🌟`;
+}
+
+export function studentCredentialsMessage(params: {
+  studentName: string;
+  grade: string;
+  parentPhone: string;
+  password: string;
+}) {
+  const { studentName, grade, parentPhone, password } = params;
+  return `مرحباً بك في معهد القمة ✨\n\nإليك تفاصيل حسابك:\n• اسم الطالب: ${studentName}\n• الصف: ${grade}\n• هاتف ولي الأمر: ${parentPhone}\n• كلمة المرور: ${password}\n\nنتمنى لك التوفيق والنجاح!`;
 }
 
 export function receiptMessage(params: {

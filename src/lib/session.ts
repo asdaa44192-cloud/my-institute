@@ -4,7 +4,9 @@ import { redirect } from "next/navigation";
 import { authOptions } from "@/lib/auth";
 
 /** Memoized per-request: pages/actions call requireUser/requireStaff etc.
- * repeatedly in the same render, and this avoids re-decoding the session each time. */
+ * repeatedly in the same render, and this avoids re-decoding the session each time.
+ * (A deleted user's session is invalidated in authOptions' `session` callback,
+ * which re-checks the database on every call — see src/lib/auth.ts.) */
 export const getCurrentUser = cache(async () => {
   const session = await getServerSession(authOptions);
   return session?.user ?? null;
@@ -34,6 +36,11 @@ export async function requireStaff() {
 /** Redirects non-students away. Use for the student portal's own data. */
 export async function requireStudent() {
   const user = await requireUser();
-  if (user.role !== "STUDENT" || !user.studentId) redirect("/dashboard");
+  if (user.role !== "STUDENT") redirect("/dashboard");
+  // A STUDENT with no linked Student profile shouldn't be possible through any
+  // in-app action, but if that invariant is ever violated (e.g. a role edited
+  // directly in the DB), redirecting to /dashboard — this function's only
+  // caller — would just loop forever. /login is a safe dead end instead.
+  if (!user.studentId) redirect("/login");
   return user as typeof user & { studentId: string };
 }

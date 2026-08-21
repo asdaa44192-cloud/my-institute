@@ -31,17 +31,35 @@ export function AttendanceGrid({
   const [loading, setLoading] = useState(false);
   const [pending, startTransition] = useTransition();
   const [saved, setSaved] = useState(false);
+  const [error, setError] = useState<string | null>(null);
 
   const subjectName = subjects.find((s) => s.id === subjectId)?.name ?? "";
 
   useEffect(() => {
     if (!grade || !subjectId || !date) return;
+    // Guards against a slower, now-stale request resolving after a later one
+    // and overwriting the grid with data for a different grade/subject/date.
+    let cancelled = false;
     // eslint-disable-next-line react-hooks/set-state-in-effect -- fetch-on-mount loading/reset flags
     setLoading(true);
     setSaved(false);
+    setError(null);
     getAttendanceForClass(grade, subjectId, date)
-      .then((data) => setRows(data as Row[]))
-      .finally(() => setLoading(false));
+      .then((data) => {
+        if (cancelled) return;
+        setRows(data as Row[]);
+      })
+      .catch((e) => {
+        if (cancelled) return;
+        setRows([]);
+        setError(e instanceof Error ? e.message : "تعذر تحميل قائمة الطلاب");
+      })
+      .finally(() => {
+        if (!cancelled) setLoading(false);
+      });
+    return () => {
+      cancelled = true;
+    };
   }, [grade, subjectId, date]);
 
   function setStatus(studentId: string, status: Status) {
@@ -50,9 +68,14 @@ export function AttendanceGrid({
 
   function handleSave() {
     const statuses = rows.filter((r) => r.status).map((r) => ({ studentId: r.student.id, status: r.status! }));
+    setError(null);
     startTransition(async () => {
-      await saveAttendance(grade, subjectId, date, statuses);
-      setSaved(true);
+      try {
+        await saveAttendance(grade, subjectId, date, statuses);
+        setSaved(true);
+      } catch (e) {
+        setError(e instanceof Error ? e.message : "فشل حفظ الحضور");
+      }
     });
   }
 
@@ -106,9 +129,11 @@ export function AttendanceGrid({
         {saved && <span className="text-sm text-emerald-600">تم الحفظ ✓</span>}
       </div>
 
+      {error && <p className="text-sm text-red-600">{error}</p>}
+
       {loading ? (
         <p className="py-8 text-center text-sm text-muted-foreground">جارٍ تحميل الطلاب...</p>
-      ) : rows.length === 0 ? (
+      ) : error ? null : rows.length === 0 ? (
         <p className="py-8 text-center text-sm text-muted-foreground">لا يوجد طلاب لهذا الصف.</p>
       ) : (
         <div className="overflow-hidden rounded-lg border border-border">

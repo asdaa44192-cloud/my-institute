@@ -77,5 +77,5 @@ export async function completeInvitation(token: string, password: string) {
     },
   });
 
-  return { email: user.email };
+  return { identifier: user.email ?? user.phone ?? "" };
 }

@@ -26,7 +26,15 @@ export default function LoginPage() {
     setLoading(false);
 
     if (result?.error) {
-      setError("البريد الإلكتروني أو رقم الهاتف أو كلمة المرور غير صحيحة.");
+      // NextAuth sets result.error to the literal string "CredentialsSignin"
+      // when authorize() returns null (wrong credentials) — anything else is
+      // a message our own authorize() deliberately threw (e.g. rate limiting),
+      // and is safe to show as-is.
+      setError(
+        result.error === "CredentialsSignin"
+          ? "البريد الإلكتروني أو رقم الهاتف أو كلمة المرور غير صحيحة."
+          : result.error
+      );
       return;
     }
 

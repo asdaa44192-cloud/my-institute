@@ -1,6 +1,7 @@
 "use client";
 
-import { useFormStatus } from "react-dom";
+import { useState, useTransition } from "react";
+import { unstable_rethrow } from "next/navigation";
 import { Button } from "@/components/ui/button";
 import { IRAQI_GRADE_LEVELS } from "@/lib/grades";
 
@@ -12,26 +13,35 @@ type StudentDefaults = {
   totalFee?: number;
 };
 
-function SubmitButton({ label }: { label: string }) {
-  const { pending } = useFormStatus();
-  return (
-    <Button type="submit" disabled={pending}>
-      {pending ? "جارٍ الحفظ..." : label}
-    </Button>
-  );
-}
-
 export function StudentForm({
   action,
   defaults,
   submitLabel = "حفظ الطالب",
 }: {
-  action: (formData: FormData) => void;
+  /** Redirects on success (via next/navigation's redirect()) — handleSubmit
+   * below must let that special throw pass through unstable_rethrow rather
+   * than treat it as a form error. */
+  action: (formData: FormData) => Promise<void>;
   defaults?: StudentDefaults;
   submitLabel?: string;
 }) {
+  const [error, setError] = useState<string | null>(null);
+  const [pending, startTransition] = useTransition();
+
+  function handleSubmit(formData: FormData) {
+    setError(null);
+    startTransition(async () => {
+      try {
+        await action(formData);
+      } catch (e) {
+        unstable_rethrow(e);
+        setError(e instanceof Error ? e.message : "فشل حفظ بيانات الطالب");
+      }
+    });
+  }
+
   return (
-    <form dir="rtl" action={action} className="space-y-4 text-right">
+    <form dir="rtl" action={handleSubmit} className="space-y-4 text-right">
       <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
         <div>
           <label className="mb-1 block text-sm font-medium text-foreground">الاسم الكامل</label>
@@ -53,6 +63,13 @@ export function StudentForm({
             <option value="" disabled>
               اختر الصف
             </option>
+            {/* The student's stored grade may predate the current grade list, or be a
+             * one-off custom value. Without this, the select would silently fall back to
+             * the disabled placeholder, and saving any other field would either get
+             * blocked by the required constraint or — worse — overwrite the grade. */}
+            {defaults?.grade && !(IRAQI_GRADE_LEVELS as readonly string[]).includes(defaults.grade) && (
+              <option value={defaults.grade}>{defaults.grade} (غير مدرج)</option>
+            )}
             {IRAQI_GRADE_LEVELS.map((grade) => (
               <option key={grade} value={grade}>
                 {grade}
@@ -93,7 +110,10 @@ export function StudentForm({
         </div>
       </div>
 
-      <SubmitButton label={submitLabel} />
+      <Button type="submit" disabled={pending}>
+        {pending ? "جارٍ الحفظ..." : submitLabel}
+      </Button>
+      {error && <p className="text-sm text-red-600">{error}</p>}
     </form>
   );
 }

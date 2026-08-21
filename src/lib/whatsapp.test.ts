@@ -17,6 +17,16 @@ describe("whatsappLink", () => {
     expect(link).toContain(encodeURIComponent("Hello & welcome!"));
     expect(link).not.toContain(" ");
   });
+
+  it("replaces a leading trunk 0 with the 964 Iraq country code", () => {
+    const link = whatsappLink("07701234567", "hi");
+    expect(link).toBe("https://wa.me/9647701234567?text=hi");
+  });
+
+  it("leaves numbers that already include a country code untouched", () => {
+    const link = whatsappLink("+964 770 123 4567", "hi");
+    expect(link).toBe("https://wa.me/9647701234567?text=hi");
+  });
 });
 
 describe("paymentReminderMessage", () => {

@@ -1,6 +1,6 @@
 "use client";
 
-import { useTransition } from "react";
+import { useState, useTransition } from "react";
 import {
   assignTeacherToSubject,
   removeTeacherFromSubject,
@@ -14,16 +14,22 @@ export function TeacherAssignments({
   assignedTeacherIds,
 }: {
   subjectId: string;
-  allTeachers: { id: string; name: string; email: string }[];
+  allTeachers: { id: string; name: string; email: string | null }[];
   assignedTeacherIds: string[];
 }) {
   const [pending, startTransition] = useTransition();
+  const [error, setError] = useState<string | null>(null);
   const assignedSet = new Set(assignedTeacherIds);
 
   function toggle(teacherId: string, assigned: boolean) {
+    setError(null);
     startTransition(async () => {
-      if (assigned) await removeTeacherFromSubject(subjectId, teacherId);
-      else await assignTeacherToSubject(subjectId, teacherId);
+      try {
+        if (assigned) await removeTeacherFromSubject(subjectId, teacherId);
+        else await assignTeacherToSubject(subjectId, teacherId);
+      } catch (e) {
+        setError(e instanceof Error ? e.message : "فشل تحديث تعيين المعلم");
+      }
     });
   }
 
@@ -32,26 +38,29 @@ export function TeacherAssignments({
   }
 
   return (
-    <ul className="divide-y divide-border text-sm">
-      {allTeachers.map((t) => {
-        const assigned = assignedSet.has(t.id);
-        return (
-          <li key={t.id} className="flex items-center justify-between py-2">
-            <label className="flex items-center gap-2">
-              <input
-                type="checkbox"
-                checked={assigned}
-                disabled={pending}
-                onChange={() => toggle(t.id, assigned)}
-                className="h-4 w-4 rounded border-input text-primary focus:ring-ring"
-              />
-              <span className="font-medium text-foreground">{t.name}</span>
-            </label>
-            <span className="text-xs text-muted-foreground">{t.email}</span>
-          </li>
-        );
-      })}
-    </ul>
+    <div>
+      <ul className="divide-y divide-border text-sm">
+        {allTeachers.map((t) => {
+          const assigned = assignedSet.has(t.id);
+          return (
+            <li key={t.id} className="flex items-center justify-between py-2">
+              <label className="flex items-center gap-2">
+                <input
+                  type="checkbox"
+                  checked={assigned}
+                  disabled={pending}
+                  onChange={() => toggle(t.id, assigned)}
+                  className="h-4 w-4 rounded border-input text-primary focus:ring-ring"
+                />
+                <span className="font-medium text-foreground">{t.name}</span>
+              </label>
+              <span className="text-xs text-muted-foreground">{t.email}</span>
+            </li>
+          );
+        })}
+      </ul>
+      {error && <p className="pt-2 text-xs text-red-600">{error}</p>}
+    </div>
   );
 }
 
@@ -65,12 +74,18 @@ export function StudentEnrollments({
   enrolledStudentIds: string[];
 }) {
   const [pending, startTransition] = useTransition();
+  const [error, setError] = useState<string | null>(null);
   const enrolledSet = new Set(enrolledStudentIds);
 
   function toggle(studentId: string, enrolled: boolean) {
+    setError(null);
     startTransition(async () => {
-      if (enrolled) await unenrollStudentFromSubject(subjectId, studentId);
-      else await enrollStudentInSubject(subjectId, studentId);
+      try {
+        if (enrolled) await unenrollStudentFromSubject(subjectId, studentId);
+        else await enrollStudentInSubject(subjectId, studentId);
+      } catch (e) {
+        setError(e instanceof Error ? e.message : "فشل تحديث تسجيل الطالب");
+      }
     });
   }
 
@@ -79,25 +94,28 @@ export function StudentEnrollments({
   }
 
   return (
-    <ul className="max-h-96 divide-y divide-border overflow-y-auto text-sm">
-      {allStudents.map((s) => {
-        const enrolled = enrolledSet.has(s.id);
-        return (
-          <li key={s.id} className="flex items-center justify-between py-2">
-            <label className="flex items-center gap-2">
-              <input
-                type="checkbox"
-                checked={enrolled}
-                disabled={pending}
-                onChange={() => toggle(s.id, enrolled)}
-                className="h-4 w-4 rounded border-input text-primary focus:ring-ring"
-              />
-              <span className="font-medium text-foreground">{s.name}</span>
-            </label>
-            <span className="text-xs text-muted-foreground">{s.grade}</span>
-          </li>
-        );
-      })}
-    </ul>
+    <div>
+      <ul className="max-h-96 divide-y divide-border overflow-y-auto text-sm">
+        {allStudents.map((s) => {
+          const enrolled = enrolledSet.has(s.id);
+          return (
+            <li key={s.id} className="flex items-center justify-between py-2">
+              <label className="flex items-center gap-2">
+                <input
+                  type="checkbox"
+                  checked={enrolled}
+                  disabled={pending}
+                  onChange={() => toggle(s.id, enrolled)}
+                  className="h-4 w-4 rounded border-input text-primary focus:ring-ring"
+                />
+                <span className="font-medium text-foreground">{s.name}</span>
+              </label>
+              <span className="text-xs text-muted-foreground">{s.grade}</span>
+            </li>
+          );
+        })}
+      </ul>
+      {error && <p className="pt-2 text-xs text-red-600">{error}</p>}
+    </div>
   );
 }

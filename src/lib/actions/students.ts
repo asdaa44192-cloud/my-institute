@@ -7,6 +7,8 @@ import { redirect } from "next/navigation";
 import { prisma } from "@/lib/prisma";
 import { requireAdmin, requireStaff, requireStudent, requireUser } from "@/lib/session";
 import { getTeacherSubjectIds } from "@/lib/actions/subjects";
+import { normalizePhoneDigits, generateRandomPassword } from "@/lib/utils";
+import { toSafeError } from "@/lib/db-errors";
 
 const studentSchema = z.object({
   name: z.string().min(1, "Name is required"),
@@ -88,15 +90,6 @@ export async function getMyStudentProfile() {
   return getStudentById(user.studentId);
 }
 
-/** Active students with no linked login yet, for the "create a student login" picker. */
-export async function listStudentsWithoutLogin() {
-  await requireAdmin();
-  return prisma.student.findMany({
-    where: { active: true, loginAccount: null },
-    select: { id: true, name: true, grade: true },
-    orderBy: { name: "asc" },
-  });
-}
 
 export async function createStudent(formData: FormData) {
   await requireAdmin();
@@ -121,10 +114,10 @@ export async function createStudent(formData: FormData) {
 
 /**
  * Same as createStudent, but optionally provisions a STUDENT login in the same
- * step (when email + password are both provided) and returns the created
- * record — including the plaintext password — instead of redirecting, so the
- * caller can offer it to the admin once (e.g. to relay over WhatsApp) before
- * it's hashed away for good.
+ * step (when a login phone number + password are both provided) and returns
+ * the created record — including the plaintext password — instead of
+ * redirecting, so the caller can offer it to the admin once (e.g. to relay
+ * over WhatsApp) before it's hashed away for good.
  */
 export async function createStudentWithLogin(formData: FormData) {
   await requireAdmin();
@@ -140,16 +133,20 @@ export async function createStudentWithLogin(formData: FormData) {
     throw new Error(parsed.error.issues[0]?.message ?? "Invalid student data");
   }
 
-  const rawEmail = ((formData.get("email") as string | null) ?? "").trim();
+  const rawLoginPhone = ((formData.get("loginPhone") as string | null) ?? "").trim();
   const rawPassword = (formData.get("password") as string | null) ?? "";
-  const wantsLogin = rawEmail !== "" || rawPassword !== "";
+  const wantsLogin = rawLoginPhone !== "" || rawPassword !== "";
 
-  let email: string | undefined;
+  let loginPhone: string | undefined;
   let password: string | undefined;
   if (wantsLogin) {
-    const emailParsed = z.string().email("البريد الإلكتروني غير صالح").safeParse(rawEmail);
-    if (!emailParsed.success) {
-      throw new Error(emailParsed.error.issues[0]?.message ?? "البريد الإلكتروني غير صالح");
+    const phoneParsed = z
+      .string()
+      .min(1, "رقم الهاتف مطلوب")
+      .refine((v) => normalizePhoneDigits(v).length >= 5, "رقم هاتف غير صالح")
+      .safeParse(rawLoginPhone);
+    if (!phoneParsed.success) {
+      throw new Error(phoneParsed.error.issues[0]?.message ?? "رقم هاتف غير صالح");
     }
     const passwordParsed = z
       .string()
@@ -159,31 +156,103 @@ export async function createStudentWithLogin(formData: FormData) {
       throw new Error(passwordParsed.error.issues[0]?.message ?? "كلمة مرور غير صالحة");
     }
 
-    email = emailParsed.data.toLowerCase();
+    loginPhone = phoneParsed.data;
     password = passwordParsed.data;
 
-    const existing = await prisma.user.findUnique({ where: { email } });
-    if (existing) throw new Error("يوجد مستخدم بهذا البريد الإلكتروني مسبقاً");
+    const digits = normalizePhoneDigits(loginPhone);
+    const existingPhoneUsers = await prisma.user.findMany({ where: { phone: { not: null } }, select: { phone: true } });
+    const clash = existingPhoneUsers.some((u) => normalizePhoneDigits(u.phone!) === digits);
+    if (clash) throw new Error("يوجد مستخدم بهذا رقم الهاتف مسبقاً");
   }
 
-  const student = await prisma.student.create({ data: parsed.data });
+  try {
+    const student = await prisma.student.create({ data: parsed.data });
 
-  if (email && password) {
-    const passwordHash = await bcrypt.hash(password, 10);
-    await prisma.user.create({
-      data: {
-        name: student.name,
-        email,
-        passwordHash,
-        activatedAt: new Date(),
-        role: "STUDENT",
-        studentId: student.id,
-      },
-    });
+    if (loginPhone && password) {
+      const passwordHash = await bcrypt.hash(password, 10);
+      await prisma.user.create({
+        data: {
+          name: student.name,
+          phone: loginPhone,
+          passwordHash,
+          activatedAt: new Date(),
+          role: "STUDENT",
+          studentId: student.id,
+        },
+      });
+    }
+
+    revalidatePath("/students");
+    revalidatePath("/dashboard");
+    revalidatePath("/settings");
+
+    return {
+      id: student.id,
+      name: student.name,
+      grade: student.grade,
+      parentPhone: student.parentPhone,
+      studentPhone: student.studentPhone,
+      loginPhone,
+      password,
+    };
+  } catch (e) {
+    throw toSafeError(e, "فشل إنشاء الطالب");
+  }
+}
+
+/**
+ * Generates a fresh random password for a student's login (creating the
+ * login account, keyed on the parent's phone, if one doesn't exist yet) and
+ * returns it in plaintext exactly once so the caller can relay it over
+ * WhatsApp. Nothing but the bcrypt hash is ever persisted, so this is the
+ * only way to get a real, current password for a student — there is no way
+ * to read back a password that was set earlier.
+ */
+export async function resetStudentLoginCredentials(studentId: string) {
+  await requireAdmin();
+
+  const student = await prisma.student.findUnique({
+    where: { id: studentId },
+    include: { loginAccount: true },
+  });
+  if (!student) throw new Error("الطالب غير موجود");
+
+  const password = generateRandomPassword();
+  const passwordHash = await bcrypt.hash(password, 10);
+
+  let loginPhone: string;
+  try {
+    if (student.loginAccount) {
+      loginPhone = student.loginAccount.phone ?? student.parentPhone;
+      await prisma.user.update({
+        where: { id: student.loginAccount.id },
+        data: { passwordHash },
+      });
+    } else {
+      loginPhone = student.parentPhone;
+      const digits = normalizePhoneDigits(loginPhone);
+      const existingPhoneUsers = await prisma.user.findMany({ where: { phone: { not: null } }, select: { phone: true } });
+      const clash = existingPhoneUsers.some((u) => normalizePhoneDigits(u.phone!) === digits);
+      if (clash) {
+        throw new Error("يوجد مستخدم بهذا رقم الهاتف مسبقاً، لا يمكن إنشاء حساب دخول تلقائياً");
+      }
+
+      await prisma.user.create({
+        data: {
+          name: student.name,
+          phone: loginPhone,
+          passwordHash,
+          activatedAt: new Date(),
+          role: "STUDENT",
+          studentId: student.id,
+        },
+      });
+    }
+  } catch (e) {
+    throw toSafeError(e, "فشل إعادة تعيين بيانات الدخول");
   }
 
   revalidatePath("/students");
-  revalidatePath("/dashboard");
   revalidatePath("/settings");
 
   return {
@@ -191,8 +260,7 @@ export async function createStudentWithLogin(formData: FormData) {
     name: student.name,
     grade: student.grade,
     parentPhone: student.parentPhone,
-    studentPhone: student.studentPhone,
-    email,
+    loginPhone,
     password,
   };
 }
@@ -225,4 +293,23 @@ export async function deactivateStudent(id: string) {
   revalidatePath("/students");
   revalidatePath("/dashboard");
   redirect("/students");
+}
+
+/**
+ * Permanently deletes a student and everything scoped to them (payments,
+ * attendance, grades, subject enrollments — all cascade via the schema).
+ * The linked login, if any, is deleted explicitly first: that FK is
+ * ON DELETE SET NULL, so without this the account would survive detached
+ * and stay able to log in. getCurrentUser() re-checks the DB on every
+ * request, so a deleted user's still-valid JWT stops working immediately.
+ */
+export async function deleteStudent(id: string) {
+  await requireAdmin();
+  await prisma.$transaction([
+    prisma.user.deleteMany({ where: { studentId: id } }),
+    prisma.student.delete({ where: { id } }),
+  ]);
+  revalidatePath("/students");
+  revalidatePath("/dashboard");
+  revalidatePath("/settings");
 }

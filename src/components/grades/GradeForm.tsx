@@ -1,16 +1,7 @@
 "use client";
 
-import { useFormStatus } from "react-dom";
+import { useRef, useState, useTransition } from "react";
 import { Button } from "@/components/ui/button";
-
-function SubmitButton() {
-  const { pending } = useFormStatus();
-  return (
-    <Button type="submit" disabled={pending}>
-      {pending ? "جارٍ الحفظ..." : "إضافة درجة"}
-    </Button>
-  );
-}
 
 export function GradeForm({
   students,
@@ -19,14 +10,30 @@ export function GradeForm({
 }: {
   students: { id: string; name: string; grade: string }[];
   subjects: { id: string; name: string }[];
-  action: (formData: FormData) => void;
+  action: (formData: FormData) => Promise<void>;
 }) {
+  const formRef = useRef<HTMLFormElement>(null);
+  const [error, setError] = useState<string | null>(null);
+  const [pending, startTransition] = useTransition();
+
   if (subjects.length === 0) {
     return <p className="text-sm text-muted-foreground">لا توجد مواد دراسية مسندة إليك بعد.</p>;
   }
 
+  function handleSubmit(formData: FormData) {
+    setError(null);
+    startTransition(async () => {
+      try {
+        await action(formData);
+        formRef.current?.reset();
+      } catch (e) {
+        setError(e instanceof Error ? e.message : "فشل تسجيل الدرجة");
+      }
+    });
+  }
+
   return (
-    <form dir="rtl" action={action} className="flex flex-wrap items-end gap-3 text-right">
+    <form ref={formRef} dir="rtl" action={handleSubmit} className="flex flex-wrap items-end gap-3 text-right">
       <div className="min-w-[180px]">
         <label className="mb-1 block text-xs font-medium text-muted-foreground">الطالب</label>
         <select
@@ -87,7 +94,10 @@ export function GradeForm({
           className="w-full sm:w-20 rounded-md border border-input px-3 py-2 text-sm outline-none focus:border-ring focus:ring-1 focus:ring-ring"
         />
       </div>
-      <SubmitButton />
+      <Button type="submit" disabled={pending}>
+        {pending ? "جارٍ الحفظ..." : "إضافة درجة"}
+      </Button>
+      {error && <p className="w-full text-sm text-red-600">{error}</p>}
     </form>
   );
 }

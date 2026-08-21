@@ -1,9 +1,11 @@
 import { PrismaClient } from "../src/generated/prisma/client";
-import { PrismaLibSql } from "@prisma/adapter-libsql";
+import { PrismaPg } from "@prisma/adapter-pg";
 import bcrypt from "bcryptjs";
-import path from "path";
 
-const adapter = new PrismaLibSql({ url: `file:${path.join(process.cwd(), "dev.db")}` });
+if (!process.env.DATABASE_URL) {
+  throw new Error("DATABASE_URL must be set to run the seed script");
+}
+const adapter = new PrismaPg(process.env.DATABASE_URL);
 const prisma = new PrismaClient({ adapter });
 
 async function main() {

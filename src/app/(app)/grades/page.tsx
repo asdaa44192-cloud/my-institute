@@ -36,7 +36,14 @@ export default async function GradesPage() {
           {students.length === 0 ? (
             <p className="text-sm text-muted-foreground">أضف طلاباً أولاً لتسجيل الدرجات.</p>
           ) : (
-            <GradeForm students={students} subjects={subjects} action={addGrade} />
+            // Narrowed to what GradeForm (a "use client" component) actually needs —
+            // getStudents() returns full profiles including phone numbers and fee/balance
+            // data, which teachers shouldn't receive just to populate a student picker.
+            <GradeForm
+              students={students.map((s) => ({ id: s.id, name: s.name, grade: s.grade }))}
+              subjects={subjects}
+              action={addGrade}
+            />
           )}
         </CardBody>
       </Card>

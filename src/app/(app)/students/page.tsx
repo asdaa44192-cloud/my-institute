@@ -5,9 +5,9 @@ import { Card } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Table, TableHeader, TableBody, TableRow, TableHead, TableCell } from "@/components/ui/table";
-import { WhatsAppButton } from "@/components/WhatsAppButton";
+import { StudentCredentialsWhatsAppButton } from "@/components/students/StudentCredentialsWhatsAppButton";
+import { DeleteStudentButton } from "@/components/students/DeleteStudentButton";
 import { formatCurrency } from "@/lib/utils";
-import { studentWelcomeMessage } from "@/lib/whatsapp";
 import { IRAQI_GRADE_LEVELS } from "@/lib/grades";
 
 export default async function StudentsPage({
@@ -102,17 +102,10 @@ export default async function StudentsPage({
                   </TableCell>
                 )}
                 <TableCell className="pe-4 text-end">
-                  <WhatsAppButton
-                    compact
-                    phone={s.parentPhone}
-                    label="واتساب"
-                    message={studentWelcomeMessage({
-                      studentName: s.name,
-                      grade: s.grade,
-                      parentPhone: s.parentPhone,
-                      studentPhone: s.studentPhone,
-                    })}
-                  />
+                  <div className="flex items-center justify-end gap-2">
+                    <StudentCredentialsWhatsAppButton compact studentId={s.id} />
+                    {isAdmin && <DeleteStudentButton id={s.id} name={s.name} />}
+                  </div>
                 </TableCell>
               </TableRow>
             ))}

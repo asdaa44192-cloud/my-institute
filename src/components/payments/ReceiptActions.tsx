@@ -1,5 +1,6 @@
 "use client";
 
+import { useState } from "react";
 import { Button } from "@/components/ui/button";
 import { formatDate } from "@/lib/utils";
 
@@ -16,7 +17,22 @@ type ReceiptData = {
 };
 
 export function ReceiptActions({ data }: { data: ReceiptData }) {
+  const [downloading, setDownloading] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+
   async function downloadPdf() {
+    setError(null);
+    setDownloading(true);
+    try {
+      await generatePdf();
+    } catch {
+      setError("تعذر إنشاء ملف PDF");
+    } finally {
+      setDownloading(false);
+    }
+  }
+
+  async function generatePdf() {
     const { jsPDF } = await import("jspdf");
     const doc = new jsPDF();
 
@@ -61,11 +77,16 @@ export function ReceiptActions({ data }: { data: ReceiptData }) {
   }
 
   return (
-    <div className="no-print flex gap-2">
-      <Button variant="secondary" onClick={() => window.print()}>
-        طباعة
-      </Button>
-      <Button onClick={downloadPdf}>تحميل PDF</Button>
+    <div className="no-print flex flex-col items-start gap-2">
+      <div className="flex gap-2">
+        <Button variant="secondary" onClick={() => window.print()}>
+          طباعة
+        </Button>
+        <Button onClick={downloadPdf} disabled={downloading}>
+          {downloading ? "جارٍ التحميل..." : "تحميل PDF"}
+        </Button>
+      </div>
+      {error && <p className="text-xs text-red-600">{error}</p>}
     </div>
   );
 }

@@ -25,8 +25,8 @@ export default function InvitePage({ params }: { params: Promise<{ token: string
 
     setLoading(true);
     try {
-      const { email } = await completeInvitation(token, password);
-      const result = await signIn("credentials", { identifier: email, password, redirect: false });
+      const { identifier } = await completeInvitation(token, password);
+      const result = await signIn("credentials", { identifier, password, redirect: false });
       if (result?.error) {
         setError("تم تعيين كلمة المرور، لكن تعذّر تسجيل الدخول تلقائياً. يرجى تسجيل الدخول يدوياً.");
         router.push("/login");
