@@ -17,7 +17,7 @@ export function EnrollmentChart({ data }: { data: { grade: string; count: number
           cursor={{ fill: "#f1f5f9" }}
           contentStyle={{ fontSize: 12, borderRadius: 8, borderColor: "#e2e8f0" }}
         />
-        <Bar dataKey="count" name="الطلاب" fill="#2563eb" radius={[4, 4, 0, 0]} />
+        <Bar dataKey="count" name="الطلاب" fill="#1e3a5f" radius={[4, 4, 0, 0]} />
       </BarChart>
     </ResponsiveContainer>
   );
