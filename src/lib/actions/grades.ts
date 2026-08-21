@@ -60,15 +60,15 @@ export async function getGradeStatsBySubject() {
   if (user.role === "TEACHER") {
     const subjectIds = await getTeacherSubjectIds(user.id);
     if (subjectIds.length === 0) return [];
-    subjectFilter = Prisma.sql`WHERE g.subjectId IN (${Prisma.join(subjectIds)})`;
+    subjectFilter = Prisma.sql`WHERE g."subjectId" IN (${Prisma.join(subjectIds)})`;
   }
 
   // Aggregate the average per subject in the database instead of pulling
   // every grade record into memory to reduce it in JS.
   const rows = await prisma.$queryRaw<{ subject: string; average: number }[]>`
-    SELECT s.name as subject, AVG(g.score * 100.0 / g.maxScore) as average
-    FROM GradeRecord g
-    JOIN Subject s ON s.id = g.subjectId
+    SELECT s.name as subject, AVG(g.score * 100.0 / g."maxScore") as average
+    FROM "GradeRecord" g
+    JOIN "Subject" s ON s.id = g."subjectId"
     ${subjectFilter}
     GROUP BY s.name
     ORDER BY s.name ASC
